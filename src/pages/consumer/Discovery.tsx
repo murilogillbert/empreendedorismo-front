@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, SlidersHorizontal, Pizza, Fish, Coffee, Croissant, Star, ArrowRight, Heart } from 'lucide-react';
 import { ConsumerLayout } from '@/components/ConsumerLayout';
 import { RestaurantMap } from '@/components/RestaurantMap';
 import { cn } from '@/lib/utils';
 import { useUserStore } from '@/store/useUserStore';
+import { restaurantService } from '@/services/restaurant.service';
+import type { Restaurant } from '@/types/api';
 
 const CATEGORIES = [
     { id: 'italian', label: 'Italian', icon: <Pizza size={18} /> },
@@ -13,15 +15,38 @@ const CATEGORIES = [
     { id: 'coffee', label: 'Coffee', icon: <Coffee size={18} /> },
 ];
 
-const MOCK_RESTAURANTS = [
-    { id: 1, name: 'The Artisan Hearth', lat: -23.5505, lng: -46.6333, category: 'Italian' },
-    { id: 2, name: 'Suki Sushi', lat: -23.5515, lng: -46.6343, category: 'Sushi' },
-    { id: 3, name: 'Cafe Noir', lat: -23.5495, lng: -46.6323, category: 'Coffee' },
-];
+
 
 export const Discovery: React.FC = () => {
     const navigate = useNavigate();
+    const { savedRestaurants, toggleSavedRestaurant } = useUserStore();
     const [selectedCategory, setSelectedCategory] = useState('italian');
+    const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchRestaurants = async () => {
+            try {
+                const data = await restaurantService.list();
+                setRestaurants(data);
+            } catch (error) {
+                console.error("Failed to fetch restaurants:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchRestaurants();
+    }, []);
+
+    const safeRestaurants = Array.isArray(restaurants) ? restaurants : [];
+    const featured = safeRestaurants[0];
+    const mapRestaurants = safeRestaurants.map(r => ({
+        id: r.id_restaurante,
+        name: r.nome_fantasia,
+        lat: r.latitude,
+        lng: r.longitude,
+        category: r.categoria_principal || 'Italian'
+    }));
 
     return (
         <ConsumerLayout>
@@ -68,61 +93,65 @@ export const Discovery: React.FC = () => {
 
             {/* Map Content */}
             <div id="discovery-map-container" className="flex-1 min-h-[50vh]">
-                <RestaurantMap restaurants={MOCK_RESTAURANTS} />
+                <RestaurantMap restaurants={mapRestaurants} />
             </div>
 
             {/* Featured Card - Offset for Bottom Nav */}
             <div id="discovery-featured-section" className="absolute bottom-32 left-0 w-full px-4 z-10">
-                <div id="discovery-featured-card" className="flex items-center gap-4 rounded-2xl bg-white dark:bg-[#1f1a16] p-4 shadow-2xl border border-gray-100 dark:border-gray-800 animate-in slide-in-from-bottom-10 duration-500 relative">
-                    {/* Save Button */}
-                    <button
-                        onClick={() => {
-                            // In a real app we would use the actual ID from the featured restaurant
-                            const featuredId = '1';
-                            useUserStore.getState().toggleSavedRestaurant(featuredId);
-                        }}
-                        className="absolute top-2 right-2 size-8 flex items-center justify-center rounded-full bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm transition-all active:scale-90"
-                    >
-                        <Heart
-                            size={16}
-                            className={cn(
-                                "transition-colors",
-                                useUserStore.getState().savedRestaurants.includes('1')
-                                    ? "fill-red-500 text-red-500"
-                                    : "text-gray-400"
-                            )}
-                        />
-                    </button>
-                    <div className="flex flex-[1.5] flex-col gap-3">
-                        <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center gap-1">
-                                <span className="text-[10px] font-extrabold tracking-widest text-[#e65c00] uppercase">Featured</span>
-                                <div className="h-1 w-1 rounded-full bg-[#e65c00]/30"></div>
-                                <div className="flex items-center text-[#e65c00]">
-                                    <Star size={12} className="fill-current" />
-                                    <span className="text-[11px] font-black ml-1">4.8</span>
-                                    <span className="text-[11px] font-bold opacity-50 ml-0.5">(120+)</span>
-                                </div>
-                            </div>
-                            <h3 className="text-base font-extrabold leading-tight text-[#181410] dark:text-white">The Artisan Hearth</h3>
-                            <p className="text-[11px] font-bold text-[#7A4C30]/70 dark:text-white/60">Authentic Italian • 0.4 miles away</p>
-                        </div>
+                {featured ? (
+                    <div id="discovery-featured-card" className="flex items-center gap-4 rounded-2xl bg-white dark:bg-[#1f1a16] p-4 shadow-2xl border border-gray-100 dark:border-gray-800 animate-in slide-in-from-bottom-10 duration-500 relative">
+                        {/* Save Button */}
                         <button
-                            onClick={() => navigate('/menu/1')}
-                            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#e65c00] py-2.5 px-4 text-white shadow-lg shadow-[#e65c00]/20 transition-transform active:scale-95"
+                            onClick={() => {
+                                toggleSavedRestaurant(String(featured.id_restaurante));
+                            }}
+                            className="absolute top-2 right-2 size-8 flex items-center justify-center rounded-full bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm transition-all active:scale-90"
                         >
-                            <span className="text-xs font-black uppercase tracking-wider">View Menu</span>
-                            <ArrowRight size={16} />
+                            <Heart
+                                size={16}
+                                className={cn(
+                                    "transition-colors",
+                                    savedRestaurants.includes(String(featured.id_restaurante))
+                                        ? "fill-red-500 text-red-500"
+                                        : "text-gray-400"
+                                )}
+                            />
                         </button>
+                        <div className="flex flex-[1.5] flex-col gap-3">
+                            <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-1">
+                                    <span className="text-[10px] font-extrabold tracking-widest text-[#e65c00] uppercase">Featured</span>
+                                    <div className="h-1 w-1 rounded-full bg-[#e65c00]/30"></div>
+                                    <div className="flex items-center text-[#e65c00]">
+                                        <Star size={12} className="fill-current" />
+                                        <span className="text-[11px] font-black ml-1">4.8</span>
+                                        <span className="text-[11px] font-bold opacity-50 ml-0.5">(120+)</span>
+                                    </div>
+                                </div>
+                                <h3 className="text-base font-extrabold leading-tight text-[#181410] dark:text-white">{featured.nome_fantasia}</h3>
+                                <p className="text-[11px] font-bold text-[#7A4C30]/70 dark:text-white/60">{featured.categoria_principal} • 0.4 miles away</p>
+                            </div>
+                            <button
+                                onClick={() => navigate(`/menu/${featured.id_restaurante}`)}
+                                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#e65c00] py-2.5 px-4 text-white shadow-lg shadow-[#e65c00]/20 transition-transform active:scale-95"
+                            >
+                                <span className="text-xs font-black uppercase tracking-wider">View Menu</span>
+                                <ArrowRight size={16} />
+                            </button>
+                        </div>
+                        <div className="h-28 w-28 shrink-0 overflow-hidden rounded-xl bg-gray-100">
+                            <img
+                                src="https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=2070&auto=format&fit=crop"
+                                className="h-full w-full object-cover"
+                                alt={featured.nome_fantasia}
+                            />
+                        </div>
                     </div>
-                    <div className="h-28 w-28 shrink-0 overflow-hidden rounded-xl bg-gray-100">
-                        <img
-                            src="https://images.unsplash.com/photo-1513104890138-7c749659a591?q=80&w=2070&auto=format&fit=crop"
-                            className="h-full w-full object-cover"
-                            alt="Artisan Pizza"
-                        />
+                ) : !loading && (
+                    <div className="bg-white/80 dark:bg-[#1f1a16]/80 p-4 rounded-2xl text-center text-xs font-bold text-gray-400 shadow-xl backdrop-blur-sm">
+                        No restaurants found in this area.
                     </div>
-                </div>
+                )}
             </div>
 
         </ConsumerLayout>

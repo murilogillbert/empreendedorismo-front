@@ -1,25 +1,34 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserPlus, Star, Shield, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ManagerLayout } from '@/components/ManagerLayout';
 import { Card } from '@/components/ui/Card';
+import { managerService } from '@/services/manager.service';
+import { useUserStore } from '@/store/useUserStore';
 
-interface StaffMember {
-    id: number;
-    name: string;
-    role: string;
-    status: 'online' | 'offline';
-    shift: string;
-}
 
-const MOCK_STAFF: StaffMember[] = [
-    { id: 1, name: 'Alice Johnson', role: 'Server', status: 'online', shift: 'Morning' },
-    { id: 2, name: 'Bob Smith', role: 'Chef', status: 'online', shift: 'All Day' },
-    { id: 3, name: 'Charlie Davis', role: 'Bartender', status: 'offline', shift: 'Evening' },
-    { id: 4, name: 'Diana Prince', role: 'Manager', status: 'online', shift: 'Morning' },
-];
 
 export const StaffManagement: React.FC = () => {
+    const { managerActiveRestaurantId } = useUserStore();
+    const [staff, setStaff] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchStaff = async () => {
+            if (!managerActiveRestaurantId) return;
+            setLoading(true);
+            try {
+                const data = await managerService.getStaff(managerActiveRestaurantId);
+                setStaff(data);
+            } catch (error) {
+                console.error("Failed to fetch staff:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchStaff();
+    }, [managerActiveRestaurantId]);
+
     return (
         <ManagerLayout>
             <header className="pt-2 pb-6">
@@ -40,7 +49,7 @@ export const StaffManagement: React.FC = () => {
                     </div>
                     <div>
                         <p className="text-[10px] font-bold text-[#5d7f89] uppercase">Active</p>
-                        <p className="text-xl font-extrabold">3/4</p>
+                        <p className="text-xl font-extrabold">{staff.filter(s => s.ativo).length}/{staff.length}</p>
                     </div>
                 </Card>
                 <Card className="p-4 flex items-center gap-3">
@@ -49,7 +58,7 @@ export const StaffManagement: React.FC = () => {
                     </div>
                     <div>
                         <p className="text-[10px] font-bold text-[#5d7f89] uppercase">Shift</p>
-                        <p className="text-xl font-extrabold">Morning</p>
+                        <p className="text-xl font-extrabold">Auto</p>
                     </div>
                 </Card>
             </div>
@@ -57,22 +66,26 @@ export const StaffManagement: React.FC = () => {
             {/* Staff List */}
             <div className="space-y-3">
                 <h3 className="text-xs font-bold text-[#5d7f89] uppercase tracking-widest px-1">Team Members</h3>
-                {MOCK_STAFF.map(member => (
-                    <Link key={member.id} to={`/staff/${member.id}`} className="block">
+                {loading ? (
+                    <div className="h-32 flex items-center justify-center">
+                        <div className="size-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                ) : staff.map(member => (
+                    <Link key={member.id_usuario} to={`/manager/staff/${member.id_usuario}`} className="block">
                         <Card className="p-4">
                             <div className="flex items-center gap-4">
                                 <div className="relative">
                                     <div className="size-12 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center font-bold text-primary">
-                                        {member.name.charAt(0)}
+                                        {member.nome_completo?.charAt(0) || 'U'}
                                     </div>
-                                    <span className={`absolute -bottom-1 -right-1 size-3 border-2 border-white dark:border-[#2d343c] rounded-full ${member.status === 'online' ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                                    <span className={`absolute -bottom-1 -right-1 size-3 border-2 border-white dark:border-[#2d343c] rounded-full ${member.ativo ? 'bg-green-500' : 'bg-gray-400'}`}></span>
                                 </div>
                                 <div className="flex-1">
-                                    <h3 className="font-bold text-sm">{member.name}</h3>
+                                    <h3 className="font-bold text-sm">{member.nome_completo}</h3>
                                     <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="text-xs text-[#5d7f89]">{member.role}</span>
+                                        <span className="text-xs text-[#5d7f89] transition-all px-2 py-0.5 bg-gray-50 dark:bg-gray-800 rounded-md font-bold uppercase tracking-tighter">{member.funcao}</span>
                                         <span className="size-1 rounded-full bg-gray-300"></span>
-                                        <span className="text-xs text-[#5d7f89]">{member.shift}</span>
+                                        <span className="text-xs text-[#5d7f89]">Shift: Regular</span>
                                     </div>
                                 </div>
                                 <button className="text-[#5d7f89] p-1">

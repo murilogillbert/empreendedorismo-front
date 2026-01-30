@@ -1,42 +1,93 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Users, ChevronRight, Split, Info, CheckCircle2 } from 'lucide-react';
 import { ConsumerLayout } from '@/components/ConsumerLayout';
 import { cn } from '@/lib/utils';
+import { useUserStore } from '@/store/useUserStore';
+import { orderService, paymentService } from '@/services/consumer.service';
+import type { Order } from '@/types/api';
 
-const MOCK_BILL_ITEMS = [
-    { id: '1', name: 'Signature Margherita', price: 42.00, quantity: 1, category: 'Food' },
-    { id: '2', name: 'Classic Negroni', price: 32.00, quantity: 2, category: 'Drinks' },
-    { id: '3', name: 'Truffle Fries', price: 18.00, quantity: 1, category: 'Sides' },
-    { id: '4', name: 'Italian Tiramisu', price: 24.00, quantity: 1, category: 'Dessert' }
-];
+
 
 export const Bill: React.FC = () => {
     const navigate = useNavigate();
+    const { activeSessionId, setSession } = useUserStore();
+    const [orders, setOrders] = useState<Order[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
     const [isSplitMode, setIsSplitMode] = useState(false);
-    const [selectedItems, setSelectedItems] = useState<string[]>([]);
+    const [selectedItems, setSelectedItems] = useState<number[]>([]);
 
-    const subtotal = MOCK_BILL_ITEMS.reduce((acc, item) => acc + item.price * item.quantity, 0);
+    useEffect(() => {
+        const fetchOrders = async () => {
+            if (!activeSessionId) {
+                setLoading(false);
+                return;
+            }
+            try {
+                const data = await orderService.listBySession(activeSessionId);
+                setOrders(data);
+            } catch (error) {
+                console.error("Failed to fetch bill data:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchOrders();
+    }, [activeSessionId]);
+
+    // Flatten all items from all orders
+    const allItems = orders.flatMap(order => (order.itens || []).map(item => ({
+        ...item,
+        status: order.status
+    })));
+
+    const subtotal = allItems.reduce((acc, item) => acc + (item.valor_total || 0), 0);
     const serviceFee = subtotal * 0.1;
     const grandTotal = subtotal + serviceFee;
 
-    const selectedTotal = MOCK_BILL_ITEMS
-        .filter(item => selectedItems.includes(item.id))
-        .reduce((acc, item) => acc + item.price * item.quantity, 0);
+    const selectedTotal = allItems
+        .filter(item => selectedItems.includes(item.id_pedido_item))
+        .reduce((acc, item) => acc + (item.valor_total || 0), 0);
 
-    const toggleItemSelection = (id: string) => {
+    const toggleItemSelection = (id: number) => {
         setSelectedItems(prev =>
             prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
         );
     };
 
-    const handleProceedToSplit = () => {
-        if (selectedItems.length === 0 && isSplitMode) {
-            alert("Please select at least one item to split.");
-            return;
+    const handleCheckout = async () => {
+        if (!activeSessionId) return;
+        setSubmitting(true);
+        try {
+            const amount = isSplitMode ? selectedTotal + (selectedTotal * 0.1) : grandTotal;
+
+            await paymentService.pay({
+                idSessao: Number(activeSessionId),
+                valor: amount,
+                metodo: 'CARTAO', // Default for now
+            });
+
+            // If not split mode or if all items were selected (simulated), close session
+            if (!isSplitMode || selectedItems.length === allItems.length) {
+                setSession(null);
+                alert("Thank you! Your payment was successful and the session is closed.");
+                navigate('/');
+            } else {
+                alert(`Payment of R$ ${amount.toFixed(2)} successful! Session remains open for other items.`);
+                setSelectedItems([]);
+                // Refresh orders
+                const data = await orderService.listBySession(activeSessionId);
+                setOrders(data);
+            }
+        } catch (error) {
+            console.error("Payment failed:", error);
+            alert("Payment failed. Please try again.");
+        } finally {
+            setSubmitting(false);
         }
-        navigate('/split-bill', { state: { amount: isSplitMode ? selectedTotal : grandTotal } });
     };
+
 
     return (
         <ConsumerLayout>
@@ -90,40 +141,49 @@ export const Bill: React.FC = () => {
 
                 {/* Items List */}
                 <div id="bill-items-list" className="space-y-3">
-                    {MOCK_BILL_ITEMS.map((item) => (
-                        <div
-                            key={item.id}
-                            id={`bill-item-${item.id}`}
-                            onClick={() => isSplitMode && toggleItemSelection(item.id)}
-                            className={cn(
-                                "p-4 rounded-2xl border transition-all flex items-center justify-between group cursor-pointer",
-                                isSplitMode && selectedItems.includes(item.id)
-                                    ? "bg-[#e65c00]/5 border-[#e65c00] shadow-lg shadow-[#e65c00]/5"
-                                    : "bg-white dark:bg-[#1f1a16] border-gray-100 dark:border-gray-800"
-                            )}
-                        >
-                            <div className="flex items-center gap-4">
-                                {isSplitMode && (
-                                    <div className={cn(
-                                        "size-6 rounded-full border-2 transition-all flex items-center justify-center",
-                                        selectedItems.includes(item.id) ? "bg-[#e65c00] border-[#e65c00]" : "border-gray-200 dark:border-gray-700"
-                                    )}>
-                                        {selectedItems.includes(item.id) && <CheckCircle2 size={14} className="text-white" />}
-                                    </div>
-                                )}
-                                <div>
-                                    <h3 className="font-extrabold text-sm text-[#181410] dark:text-white">{item.name}</h3>
-                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Qty: {item.quantity}</p>
-                                </div>
-                            </div>
-                            <span className={cn(
-                                "font-black text-sm transition-colors",
-                                selectedItems.includes(item.id) ? "text-[#e65c00]" : "text-[#181410] dark:text-white"
-                            )}>
-                                R$ {(item.price * item.quantity).toFixed(2)}
-                            </span>
+                    {loading ? (
+                        <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                            <div className="size-12 border-4 border-[#e65c00] border-t-transparent rounded-full animate-spin"></div>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading bill details...</p>
                         </div>
-                    ))}
+                    ) : allItems.length === 0 ? (
+                        <div className="text-center py-12 text-gray-400 font-bold text-sm">No items found for this session.</div>
+                    ) : (
+                        allItems.map((item) => (
+                            <div
+                                key={item.id_pedido_item}
+                                id={`bill-item-${item.id_pedido_item}`}
+                                onClick={() => isSplitMode && toggleItemSelection(item.id_pedido_item)}
+                                className={cn(
+                                    "p-4 rounded-2xl border transition-all flex items-center justify-between group cursor-pointer",
+                                    isSplitMode && selectedItems.includes(item.id_pedido_item)
+                                        ? "bg-[#e65c00]/5 border-[#e65c00] shadow-lg shadow-[#e65c00]/5"
+                                        : "bg-white dark:bg-[#1f1a16] border-gray-100 dark:border-gray-800"
+                                )}
+                            >
+                                <div className="flex items-center gap-4">
+                                    {isSplitMode && (
+                                        <div className={cn(
+                                            "size-6 rounded-full border-2 transition-all flex items-center justify-center",
+                                            selectedItems.includes(item.id_pedido_item) ? "bg-[#e65c00] border-[#e65c00]" : "border-gray-200 dark:border-gray-700"
+                                        )}>
+                                            {selectedItems.includes(item.id_pedido_item) && <CheckCircle2 size={14} className="text-white" />}
+                                        </div>
+                                    )}
+                                    <div>
+                                        <h3 className="font-extrabold text-sm text-[#181410] dark:text-white">{item.nome || 'Item'}</h3>
+                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Qty: {item.quantidade}</p>
+                                    </div>
+                                </div>
+                                <span className={cn(
+                                    "font-black text-sm transition-colors",
+                                    selectedItems.includes(item.id_pedido_item) ? "text-[#e65c00]" : "text-[#181410] dark:text-white"
+                                )}>
+                                    R$ {item.valor_total.toFixed(2)}
+                                </span>
+                            </div>
+                        ))
+                    )}
                 </div>
 
                 {/* Totals Summary */}
@@ -163,11 +223,18 @@ export const Bill: React.FC = () => {
                     </div>
 
                     <button
-                        onClick={handleProceedToSplit}
-                        className="w-full bg-[#181410] hover:bg-black transition-all py-5.5 rounded-[2.5rem] text-white font-black text-xs uppercase tracking-[0.25em] flex items-center justify-center gap-3 shadow-2xl active:scale-95 group"
+                        onClick={handleCheckout}
+                        disabled={submitting || allItems.length === 0}
+                        className="w-full bg-[#181410] hover:bg-black transition-all py-5.5 rounded-[2.5rem] text-white font-black text-xs uppercase tracking-[0.25em] flex items-center justify-center gap-3 shadow-2xl active:scale-95 group disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {isSplitMode ? 'Proceed to Split' : 'Checkout Now'}
-                        <ChevronRight size={18} strokeWidth={2.5} className="group-hover:translate-x-1 transition-transform" />
+                        {submitting ? (
+                            <div className="size-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                            <>
+                                {isSplitMode ? 'Finalize Split Payment' : 'Checkout Now'}
+                                <ChevronRight size={18} strokeWidth={2.5} className="group-hover:translate-x-1 transition-transform" />
+                            </>
+                        )}
                     </button>
                 </div>
             </div>

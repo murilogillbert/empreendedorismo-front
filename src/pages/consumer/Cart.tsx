@@ -1,20 +1,49 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trash2, Plus, Minus, MessageSquare, Send } from 'lucide-react';
 import { ConsumerLayout } from '@/components/ConsumerLayout';
 import { useUserStore } from '@/store/useUserStore';
+import { orderService, sessionService } from '@/services/consumer.service';
 import { Card } from '@/components/ui/Card';
 
 export const Cart: React.FC = () => {
     const navigate = useNavigate();
-    const { cart, removeFromCart, updateCartQuantity, clearCart } = useUserStore();
+    const { cart, activeSessionId, setSession, clearCart, removeFromCart, updateCartQuantity } = useUserStore();
+    const [submitting, setSubmitting] = useState(false);
 
     const total = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
-    const handleSubmitOrder = () => {
-        // Mock submission
-        alert("Order submitted to kitchen!");
-        clearCart();
-        navigate('/orders');
+    const handleSubmitOrder = async () => {
+        setSubmitting(true);
+        try {
+            let sessionId = activeSessionId;
+
+            // If no session, create one (mocking table 1 for now)
+            if (!sessionId) {
+                const session = await sessionService.open(1);
+                sessionId = String(session.id_sessao);
+                setSession(sessionId);
+            }
+
+            const orderItems = cart.map(item => ({
+                idProduto: Number(item.id),
+                quantidade: item.quantity,
+                observacao: item.note
+            }));
+
+            await orderService.create({
+                idSessao: Number(sessionId),
+                itens: orderItems
+            });
+
+            clearCart();
+            navigate('/orders');
+        } catch (error) {
+            console.error("Failed to submit order:", error);
+            alert("Failed to submit order. Please try again.");
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     if (cart.length === 0) {
@@ -115,10 +144,17 @@ export const Cart: React.FC = () => {
                     </div>
                     <button
                         onClick={handleSubmitOrder}
-                        className="w-full bg-[#181410] hover:bg-black transition-all py-5.5 rounded-[2.5rem] text-white font-black text-xs uppercase tracking-[0.25em] flex items-center justify-center gap-3 shadow-2xl active:scale-95 group"
+                        disabled={submitting}
+                        className="w-full bg-[#181410] hover:bg-black transition-all py-5.5 rounded-[2.5rem] text-white font-black text-xs uppercase tracking-[0.25em] flex items-center justify-center gap-3 shadow-2xl active:scale-95 group disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        Send to Kitchen
-                        <Send size={18} strokeWidth={2.5} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                        {submitting ? (
+                            <div className="size-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        ) : (
+                            <>
+                                Send to Kitchen
+                                <Send size={18} strokeWidth={2.5} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                            </>
+                        )}
                     </button>
                 </div>
             </div>

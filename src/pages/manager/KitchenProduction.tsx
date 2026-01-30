@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     ChevronLeft,
@@ -11,72 +11,73 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
+import { managerService } from '@/services/manager.service';
+import { useUserStore } from '@/store/useUserStore';
 
-interface OrderItem {
-    id: string;
-    name: string;
-    quantity: number;
-    observations?: string;
+
+interface KitchenOrder {
+    id_fila: number;
+    id_pedido_item: number;
+    mesa: string;
+    nome: string;
+    quantidade: number;
+    observacao?: string;
+    status: 'PENDENTE' | 'PREPARANDO' | 'PRONTO' | 'ENTREGUE';
+    criado_em: string;
+    setor: string;
 }
 
-interface Order {
-    id: string;
-    table: string;
-    status: 'AWAITING' | 'PREPARING' | 'READY';
-    items: OrderItem[];
-    timeAgo: string; // e.g. "5m"
-    type: 'KITCHEN' | 'BAR';
-}
 
-const MOCK_ORDERS: Order[] = [
-    {
-        id: '2401',
-        table: 'Mesa 04',
-        status: 'PREPARING',
-        timeAgo: '8m',
-        type: 'KITCHEN',
-        items: [
-            { id: '1', name: 'Classic Burger', quantity: 2, observations: 'No pickles' },
-            { id: '2', name: 'Large Fries', quantity: 1 }
-        ]
-    },
-    {
-        id: '2402',
-        table: 'Mesa 12',
-        status: 'AWAITING',
-        timeAgo: '2m',
-        type: 'KITCHEN',
-        items: [
-            { id: '3', name: 'Pepperoni Pizza', quantity: 1 },
-            { id: '4', name: 'Coke 350ml', quantity: 2 }
-        ]
-    },
-    {
-        id: '2403',
-        table: 'Mesa 08',
-        status: 'READY',
-        timeAgo: '15m',
-        type: 'BAR',
-        items: [
-            { id: '5', name: 'Caipirinha', quantity: 2 }
-        ]
-    }
-];
 
 export const KitchenProduction: React.FC = () => {
     const navigate = useNavigate();
+    const { managerActiveRestaurantId } = useUserStore();
     const [viewMode, setViewMode] = useState<'PRODUCTION' | 'MONITOR'>('PRODUCTION');
-    const [orders, setOrders] = useState<Order[]>(MOCK_ORDERS);
+    const [orders, setOrders] = useState<KitchenOrder[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [activeSector, setActiveSector] = useState<'COZINHA' | 'BAR'>('COZINHA');
 
-    const updateStatus = (orderId: string, nextStatus: Order['status']) => {
-        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus } : o));
+    const fetchQueue = useCallback(async () => {
+        if (!managerActiveRestaurantId) return;
+        try {
+            const data = await managerService.getKitchenQueue(managerActiveRestaurantId, activeSector);
+            setOrders(data);
+        } catch (error) {
+            console.error("Failed to fetch kitchen queue:", error);
+        } finally {
+            setLoading(false);
+        }
+    }, [managerActiveRestaurantId, activeSector]);
+
+    useEffect(() => {
+        fetchQueue();
+        const interval = setInterval(fetchQueue, 10000); // Poll every 10s
+        return () => clearInterval(interval);
+    }, [fetchQueue]);
+
+    const updateStatus = async (idFila: number, nextStatus: KitchenOrder['status']) => {
+        try {
+            await managerService.updateKitchenStatus(idFila, nextStatus);
+            // Optimistic update
+            setOrders(prev => prev.map(o => o.id_fila === idFila ? { ...o, status: nextStatus } : o));
+        } catch (error) {
+            console.error("Failed to update status:", error);
+            alert("Failed to update status.");
+            fetchQueue();
+        }
     };
 
     const filteredOrders = orders.filter(o =>
-        o.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        o.table.toLowerCase().includes(searchTerm.toLowerCase())
+        String(o.id_pedido_item).includes(searchTerm) ||
+        o.mesa.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        o.nome.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const getTimeAgo = (dateStr: string) => {
+        const diff = Math.floor((new Date().getTime() - new Date(dateStr).getTime()) / 60000);
+        return `${diff}m`;
+    };
 
     return (
         <div className="min-h-screen bg-[#f8fafb] dark:bg-[#1a1f24]">
@@ -104,11 +105,33 @@ export const KitchenProduction: React.FC = () => {
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5d7f89]" size={16} />
                             <input
                                 type="text"
-                                placeholder="Search by ID or Table..."
+                                placeholder="Search by Item or Table..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="bg-gray-50 dark:bg-[#2d343c] border border-gray-100 dark:border-gray-800 rounded-xl py-2 pl-10 pr-4 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20 w-64 transition-all"
                             />
+                        </div>
+
+                        {/* Sector Switcher */}
+                        <div className="flex items-center bg-gray-50 dark:bg-[#2d343c] p-1 rounded-xl ml-2">
+                            <button
+                                onClick={() => setActiveSector('COZINHA')}
+                                className={cn(
+                                    "px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all",
+                                    activeSector === 'COZINHA' ? "bg-white dark:bg-gray-800 text-primary shadow-sm" : "text-[#5d7f89]"
+                                )}
+                            >
+                                Kitchen
+                            </button>
+                            <button
+                                onClick={() => setActiveSector('BAR')}
+                                className={cn(
+                                    "px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all",
+                                    activeSector === 'BAR' ? "bg-white dark:bg-gray-800 text-primary shadow-sm" : "text-[#5d7f89]"
+                                )}
+                            >
+                                Bar
+                            </button>
                         </div>
 
                         <div className="h-10 border-l border-gray-100 dark:border-gray-800 mx-2 hidden sm:block" />
@@ -141,53 +164,61 @@ export const KitchenProduction: React.FC = () => {
             </header>
 
             <main className="p-6 max-w-[1600px] mx-auto">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {/* Column: Awaiting */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 px-1">
-                            <div className="size-2 rounded-full bg-orange-500 animate-pulse" />
-                            <h2 className="text-xs font-black text-[#5d7f89] uppercase tracking-widest">Awaiting Prep ({orders.filter(o => o.status === 'AWAITING').length})</h2>
-                        </div>
-                        {filteredOrders.filter(o => o.status === 'AWAITING').map(order => (
-                            <OrderCard key={order.id} order={order} onAction={() => updateStatus(order.id, 'PREPARING')} actionLabel="Start Prep" viewMode={viewMode} />
-                        ))}
+                {loading ? (
+                    <div className="flex flex-col items-center justify-center py-40 space-y-4">
+                        <div className="size-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Loading Queue...</p>
                     </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {/* Column: PENDENTE */}
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2 px-1">
+                                <div className="size-2 rounded-full bg-orange-500 animate-pulse" />
+                                <h2 className="text-xs font-black text-[#5d7f89] uppercase tracking-widest">Awaiting Prep ({orders.filter(o => o.status === 'PENDENTE').length})</h2>
+                            </div>
+                            {filteredOrders.filter(o => o.status === 'PENDENTE').map(order => (
+                                <OrderCard key={order.id_fila} order={order} onAction={() => updateStatus(order.id_fila, 'PREPARANDO')} actionLabel="Start Prep" viewMode={viewMode} timeAgo={getTimeAgo(order.criado_em)} />
+                            ))}
+                        </div>
 
-                    {/* Column: Preparing */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 px-1">
-                            <div className="size-2 rounded-full bg-primary" />
-                            <h2 className="text-xs font-black text-[#5d7f89] uppercase tracking-widest">Preparing ({orders.filter(o => o.status === 'PREPARING').length})</h2>
+                        {/* Column: PREPARANDO */}
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2 px-1">
+                                <div className="size-2 rounded-full bg-primary" />
+                                <h2 className="text-xs font-black text-[#5d7f89] uppercase tracking-widest">Preparing ({orders.filter(o => o.status === 'PREPARANDO').length})</h2>
+                            </div>
+                            {filteredOrders.filter(o => o.status === 'PREPARANDO').map(order => (
+                                <OrderCard key={order.id_fila} order={order} onAction={() => updateStatus(order.id_fila, 'PRONTO')} actionLabel="Mark as Ready" viewMode={viewMode} variant="primary" timeAgo={getTimeAgo(order.criado_em)} />
+                            ))}
                         </div>
-                        {filteredOrders.filter(o => o.status === 'PREPARING').map(order => (
-                            <OrderCard key={order.id} order={order} onAction={() => updateStatus(order.id, 'READY')} actionLabel="Mark as Ready" viewMode={viewMode} variant="primary" />
-                        ))}
-                    </div>
 
-                    {/* Column: Ready */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 px-1">
-                            <div className="size-2 rounded-full bg-green-500" />
-                            <h2 className="text-xs font-black text-[#5d7f89] uppercase tracking-widest">Ready for Pickup ({orders.filter(o => o.status === 'READY').length})</h2>
+                        {/* Column: PRONTO */}
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2 px-1">
+                                <div className="size-2 rounded-full bg-green-500" />
+                                <h2 className="text-xs font-black text-[#5d7f89] uppercase tracking-widest">Ready for Pickup ({orders.filter(o => o.status === 'PRONTO').length})</h2>
+                            </div>
+                            {filteredOrders.filter(o => o.status === 'PRONTO').map(order => (
+                                <OrderCard key={order.id_fila} order={order} onAction={() => updateStatus(order.id_fila, 'ENTREGUE')} actionLabel="Delivered" viewMode={viewMode} variant="success" timeAgo={getTimeAgo(order.criado_em)} />
+                            ))}
                         </div>
-                        {filteredOrders.filter(o => o.status === 'READY').map(order => (
-                            <OrderCard key={order.id} order={order} onAction={() => { }} actionLabel="Delivered" viewMode={viewMode} variant="success" isLastStep />
-                        ))}
                     </div>
-                </div>
+                )}
             </main>
         </div>
     );
 };
 
 const OrderCard: React.FC<{
-    order: Order,
+    order: KitchenOrder,
     onAction: () => void,
     actionLabel: string,
     viewMode: 'PRODUCTION' | 'MONITOR',
+    timeAgo: string,
     variant?: 'default' | 'primary' | 'success',
     isLastStep?: boolean
-}> = ({ order, onAction, actionLabel, viewMode, variant = 'default', isLastStep }) => {
+}> = ({ order, onAction, actionLabel, viewMode, timeAgo, variant = 'default', isLastStep }) => {
     return (
         <Card className={cn(
             "p-0 overflow-hidden border-2 transition-all hover:shadow-xl",
@@ -198,32 +229,30 @@ const OrderCard: React.FC<{
                 variant === 'primary' ? "bg-primary/5 border-primary/10" : variant === 'success' ? "bg-green-50 dark:bg-green-900/10 border-green-100 dark:border-green-900/20" : "bg-gray-50/50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-800"
             )}>
                 <div className="flex items-center gap-3">
-                    <span className="text-lg font-black tracking-tight">#{order.id}</span>
-                    <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-700 rounded-md text-[9px] font-black uppercase">{order.table}</span>
+                    <span className="text-lg font-black tracking-tight">#{order.id_pedido_item}</span>
+                    <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-700 rounded-md text-[9px] font-black uppercase">{order.mesa}</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#5d7f89]">
                     <Clock size={12} />
-                    {order.timeAgo}
+                    {timeAgo}
                 </div>
             </div>
 
             <div className="p-5 space-y-4">
                 <div className="space-y-3">
-                    {order.items.map(item => (
-                        <div key={item.id} className="flex gap-3">
-                            <div className="flex-shrink-0 size-6 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-[10px] font-black text-primary border border-gray-200 dark:border-gray-700">
-                                {item.quantity}x
-                            </div>
-                            <div>
-                                <p className="text-sm font-bold leading-tight">{item.name}</p>
-                                {item.observations && (
-                                    <p className="text-[10px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-md mt-1 italic">
-                                        Note: {item.observations}
-                                    </p>
-                                )}
-                            </div>
+                    <div className="flex gap-3">
+                        <div className="flex-shrink-0 size-6 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-[10px] font-black text-primary border border-gray-200 dark:border-gray-700">
+                            {order.quantidade}x
                         </div>
-                    ))}
+                        <div>
+                            <p className="text-sm font-bold leading-tight">{order.nome}</p>
+                            {order.observacao && (
+                                <p className="text-[10px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-md mt-1 italic">
+                                    Note: {order.observacao}
+                                </p>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
                 {viewMode === 'PRODUCTION' && !isLastStep && (

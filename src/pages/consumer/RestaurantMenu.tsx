@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     ArrowLeft,
@@ -14,54 +14,45 @@ import {
 import { ConsumerLayout } from '@/components/ConsumerLayout';
 import { cn } from '@/lib/utils';
 import { useUserStore } from '@/store/useUserStore';
-
-const CATEGORIES = ['Appetizers', 'Mains', 'Drinks', 'Desserts'];
-
-const MOCK_MENU = [
-    {
-        id: '1',
-        category: 'Appetizers',
-        name: 'Truffle Parmesan Fries',
-        price: 14.00,
-        description: 'Hand-cut potatoes, truffle oil, aged parmesan, fresh parsley.',
-        image: 'https://images.unsplash.com/photo-1630384066202-18d17d120593?q=80&w=1964&auto=format&fit=crop',
-        allergens: ['Dairy', 'Gluten']
-    },
-    {
-        id: '2',
-        category: 'Appetizers',
-        name: 'Artisan Bruschetta',
-        price: 12.50,
-        description: 'Heirloom tomatoes, balsamic glaze, fresh basil, sourdough.',
-        image: 'https://images.unsplash.com/photo-1572656631137-7935297eff55?q=80&w=2070&auto=format&fit=crop',
-        allergens: ['Vegan']
-    },
-    {
-        id: '3',
-        category: 'Mains',
-        name: 'Signature Wagyu Burger',
-        price: 24.00,
-        description: '8oz Wagyu patty, aged cheddar, caramelized onion jam, brioche bun, secret aioli.',
-        image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?q=80&w=1899&auto=format&fit=crop',
-        allergens: ['Dairy', 'Meat'],
-        isPopular: true,
-        calories: 850
-    }
-];
+import { restaurantService } from '@/services/restaurant.service';
+import type { Restaurant, MenuItem, MenuCategory } from '@/types/api';
 
 export const RestaurantMenu: React.FC = () => {
     const navigate = useNavigate();
     const { id } = useParams();
-    const { user, identify, cart, addToCart, setCurrentRestaurant } = useUserStore();
-    const [activeCategory, setActiveCategory] = useState('Appetizers');
+    const { user, anonymousLogin, cart, addToCart, setCurrentRestaurant } = useUserStore();
+
+    const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+    const [menu, setMenu] = useState<MenuItem[]>([]);
+    const [categories, setCategories] = useState<MenuCategory[]>([]);
+    const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
+    const [loading, setLoading] = useState(true);
+
     const [showIdentityModal, setShowIdentityModal] = useState(false);
     const [guestData, setGuestData] = useState({ name: '', contact: '' });
-    const [pendingItem, setPendingItem] = useState<any>(null);
+    const [pendingItem, setPendingItem] = useState<MenuItem | null>(null);
 
-    React.useEffect(() => {
-        if (id) {
-            setCurrentRestaurant(id);
-        }
+    useEffect(() => {
+        const fetchData = async () => {
+            if (!id) return;
+            setLoading(true);
+            try {
+                const [resInfo, cats] = await Promise.all([
+                    restaurantService.getById(id),
+                    restaurantService.getCategories(id)
+                ]);
+                setRestaurant(resInfo);
+                setMenu(resInfo.menu || []);
+                setCategories(cats);
+                if (cats.length > 0) setActiveCategoryId(cats[0].id_categoria);
+            } catch (error) {
+                console.error("Failed to fetch menu data:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+        setCurrentRestaurant(id || null);
     }, [id, setCurrentRestaurant]);
 
     const handleBack = () => {
@@ -72,39 +63,39 @@ export const RestaurantMenu: React.FC = () => {
     const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
     const cartTotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
-    const handleAddToCart = (item: any) => {
+    const handleAddToCart = (item: MenuItem) => {
         if (!user) {
             setPendingItem(item);
             setShowIdentityModal(true);
             return;
         }
         addToCart({
-            id: item.id,
-            name: item.name,
-            price: item.price,
+            id: String(item.id_item),
+            name: item.nome,
+            price: item.preco,
             quantity: 1,
             image: item.image
         });
     };
 
-    const handleGuestIdentify = (e: React.FormEvent) => {
+    const handleGuestIdentify = async (e: React.FormEvent) => {
         e.preventDefault();
-        identify({
-            name: guestData.name,
-            phone: guestData.contact,
-            isGuest: true
-        });
-        if (pendingItem) {
-            addToCart({
-                id: pendingItem.id,
-                name: pendingItem.name,
-                price: pendingItem.price,
-                quantity: 1,
-                image: pendingItem.image
-            });
-            setPendingItem(null);
+        try {
+            await anonymousLogin();
+            if (pendingItem) {
+                addToCart({
+                    id: String(pendingItem.id_item),
+                    name: pendingItem.nome,
+                    price: pendingItem.preco,
+                    quantity: 1,
+                    image: pendingItem.image
+                });
+                setPendingItem(null);
+            }
+            setShowIdentityModal(false);
+        } catch (error) {
+            console.error("Anonymous login failed:", error);
         }
-        setShowIdentityModal(false);
     };
 
     return (
@@ -116,9 +107,9 @@ export const RestaurantMenu: React.FC = () => {
                         <ArrowLeft size={18} />
                     </button>
                     <div id="menu-restaurant-details">
-                        <h1 id="menu-restaurant-name" className="text-lg font-black leading-tight tracking-tight">The Gourmet Kitchen</h1>
+                        <h1 id="menu-restaurant-name" className="text-lg font-black leading-tight tracking-tight">{restaurant?.nome_fantasia || 'Loading...'}</h1>
                         <p id="menu-restaurant-stats" className="text-[10px] text-[#e65c00] font-black uppercase tracking-widest flex items-center gap-1">
-                            Fine Dining <span className="text-gray-300">•</span> 4.9 <Star size={10} className="fill-current" />
+                            {restaurant?.categoria_principal} <span className="text-gray-300">•</span> 4.9 <Star size={10} className="fill-current" />
                         </p>
                     </div>
                 </div>
@@ -150,19 +141,19 @@ export const RestaurantMenu: React.FC = () => {
 
             {/* Category Navigation */}
             <div id="menu-category-nav" className="sticky top-[73px] z-30 bg-white/80 dark:bg-[#181410]/80 backdrop-blur-md py-3 px-4 flex gap-3 overflow-x-auto no-scrollbar border-b border-gray-100 dark:border-gray-800">
-                {CATEGORIES.map(cat => (
+                {categories.map(cat => (
                     <button
-                        key={cat}
-                        id={`menu-cat-${cat.toLowerCase()}`}
-                        onClick={() => setActiveCategory(cat)}
+                        key={cat.id_categoria}
+                        id={`menu-cat-${cat.id_categoria}`}
+                        onClick={() => setActiveCategoryId(cat.id_categoria)}
                         className={cn(
                             "flex h-9 shrink-0 items-center justify-center px-6 rounded-full text-[10px] font-black uppercase tracking-wider transition-all active:scale-95",
-                            activeCategory === cat
+                            activeCategoryId === cat.id_categoria
                                 ? "bg-[#e65c00] text-white shadow-md shadow-[#e65c00]/20"
                                 : "bg-gray-50 dark:bg-gray-800 text-[#7A4C30] dark:text-white/40 border border-transparent hover:border-gray-200"
                         )}
                     >
-                        {cat}
+                        {cat.nome}
                     </button>
                 ))}
             </div>
@@ -170,68 +161,39 @@ export const RestaurantMenu: React.FC = () => {
             {/* Menu Items */}
             <div id="menu-items-container" className="pb-64 px-4 pt-6">
                 <div id="menu-items-header" className="flex items-center justify-between mb-6 px-1">
-                    <h2 id="menu-active-category-title" className="text-xl font-black tracking-tight">{activeCategory}</h2>
-                    <span id="menu-active-category-subtitle" className="text-[#7A4C30]/40 text-[10px] font-black uppercase tracking-[0.15em]">{activeCategory === 'Mains' ? 'Signature Dishes' : 'Small Plates'}</span>
+                    <h2 id="menu-active-category-title" className="text-xl font-black tracking-tight">
+                        {categories.find(c => c.id_categoria === activeCategoryId)?.nome || 'Menu'}
+                    </h2>
                 </div>
 
                 <div id="menu-items-list" className="space-y-4">
-                    {MOCK_MENU.filter(item => item.category === activeCategory).map(item => (
-                        item.isPopular ? (
-                            /* Large Card for Featured/Popular Mains */
-                            <div key={item.id} id={`menu-item-${item.id}`} className="flex flex-col bg-white dark:bg-[#1f1a16] rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden group">
-                                <div id={`menu-item-img-container-${item.id}`} className="w-full h-44 bg-center bg-cover relative" style={{ backgroundImage: `url(${item.image})` }}>
-                                    <div id={`menu-item-price-tag-${item.id}`} className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-lg">
-                                        <p className="text-[#e65c00] font-black text-sm">R$ {item.price.toFixed(2)}</p>
-                                    </div>
-                                    <div className="absolute inset-0 bg-black/5 group-hover:bg-transparent transition-colors"></div>
-                                </div>
-                                <div id={`menu-item-content-${item.id}`} className="p-5">
-                                    <div className="flex justify-between items-center mb-1.5">
-                                        <h3 id={`menu-item-name-${item.id}`} className="text-lg font-black text-[#181410] dark:text-white">{item.name}</h3>
-                                        <div className="flex gap-0.5 text-[#7A4C30]">
-                                            <Star size={14} className="fill-current text-[#e65c00]" />
-                                            <Star size={14} className="fill-current text-[#e65c00]" />
-                                        </div>
-                                    </div>
-                                    <p id={`menu-item-desc-${item.id}`} className="text-xs text-gray-500 dark:text-white/50 mb-4 leading-relaxed">{item.description}</p>
-                                    <div id={`menu-item-footer-${item.id}`} className="flex items-center justify-between">
-                                        <div className="flex gap-2">
-                                            <span className="text-[8px] px-2 py-1 bg-[#7A4C30]/5 text-[#7A4C30] rounded font-black uppercase tracking-wider border border-[#7A4C30]/10">Popular</span>
-                                            <span className="text-[8px] px-2 py-1 bg-gray-50 dark:bg-gray-800 text-gray-400 rounded font-black uppercase tracking-wider">{item.calories} Cal</span>
-                                        </div>
-                                        <button
-                                            id={`menu-item-add-button-${item.id}`}
-                                            onClick={() => handleAddToCart(item)}
-                                            className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#e65c00] text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#e65c00]/20 active:scale-95 transition-all hover:bg-orange-600"
-                                        >
-                                            Add to Order
-                                            <ShoppingBag size={14} />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            /* Regular List Item Card */
-                            <div key={item.id} id={`menu-item-${item.id}`} className="bg-white dark:bg-[#1f1a16] rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-gray-800 flex gap-4 transition-all hover:shadow-md animate-in fade-in slide-in-from-bottom-3 duration-500">
-                                <div id={`menu-item-img-${item.id}`} className="size-[90px] rounded-xl bg-center bg-cover shrink-0 shadow-inner" style={{ backgroundImage: `url(${item.image})` }}></div>
-                                <div id={`menu-item-details-${item.id}`} className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
+                    {loading ? (
+                        <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                            <div className="size-12 border-4 border-[#e65c00] border-t-transparent rounded-full animate-spin"></div>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Loading our finest dishes...</p>
+                        </div>
+                    ) : (menu.filter(item => item.id_categoria === activeCategoryId).length === 0 ? (
+                        <div className="text-center py-12 text-gray-400 font-bold text-sm">No items in this category.</div>
+                    ) : (
+                        menu.filter(item => item.id_categoria === activeCategoryId).map(item => (
+                            <div key={item.id_item} id={`menu-item-${item.id_item}`} className="bg-white dark:bg-[#1f1a16] rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-gray-800 flex gap-4 transition-all hover:shadow-md animate-in fade-in slide-in-from-bottom-3 duration-500">
+                                <div id={`menu-item-img-${item.id_item}`} className="size-[90px] rounded-xl bg-center bg-cover shrink-0 shadow-inner" style={{ backgroundImage: `url(${item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=2080&auto=format&fit=crop'})` }}></div>
+                                <div id={`menu-item-details-${item.id_item}`} className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
                                     <div>
                                         <div className="flex justify-between items-start gap-2">
-                                            <h3 id={`menu-item-name-${item.id}`} className="font-extrabold text-sm leading-tight truncate">{item.name}</h3>
-                                            <span id={`menu-item-price-${item.id}`} className="text-[#e65c00] font-black text-sm">R$ {item.price.toFixed(2)}</span>
+                                            <h3 id={`menu-item-name-${item.id_item}`} className="font-extrabold text-sm leading-tight truncate">{item.nome}</h3>
+                                            <span id={`menu-item-price-${item.id_item}`} className="text-[#e65c00] font-black text-sm">R$ {item.preco.toFixed(2)}</span>
                                         </div>
-                                        <p id={`menu-item-desc-${item.id}`} className="text-[10px] text-gray-400 dark:text-white/40 mt-1 line-clamp-2 leading-relaxed">{item.description}</p>
+                                        <p id={`menu-item-desc-${item.id_item}`} className="text-[10px] text-gray-400 dark:text-white/40 mt-1 line-clamp-2 leading-relaxed">{item.descricao}</p>
                                     </div>
-                                    <div id={`menu-item-actions-${item.id}`} className="flex items-center justify-between mt-2">
+                                    <div id={`menu-item-actions-${item.id_item}`} className="flex items-center justify-between mt-2">
                                         <div className="flex gap-1.5">
-                                            {item.allergens.map(a => (
-                                                <span key={a} className="text-[8px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-full border border-gray-100 dark:border-gray-800 text-[#7A4C30]/50 whitespace-nowrap">
-                                                    {a}
-                                                </span>
-                                            ))}
+                                            <span className="text-[8px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-full border border-gray-100 dark:border-gray-800 text-[#7A4C30]/50 whitespace-nowrap">
+                                                Handcrafted
+                                            </span>
                                         </div>
                                         <button
-                                            id={`menu-item-add-button-${item.id}`}
+                                            id={`menu-item-add-button-${item.id_item}`}
                                             onClick={() => handleAddToCart(item)}
                                             className="size-9 flex items-center justify-center rounded-full bg-[#e65c00] text-white shadow-lg shadow-[#e65c00]/15 active:scale-90 transition-transform"
                                         >
@@ -240,7 +202,7 @@ export const RestaurantMenu: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                        )
+                        ))
                     ))}
                 </div>
             </div>

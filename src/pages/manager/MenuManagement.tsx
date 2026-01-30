@@ -1,35 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Search, MoreVertical } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ManagerLayout } from '@/components/ManagerLayout';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
+import { restaurantService } from '@/services/restaurant.service';
+import { useUserStore } from '@/store/useUserStore';
+import type { MenuItem } from '@/types/api';
 
-interface MenuItem {
-    id: number;
-    name: string;
-    description: string;
-    price: number;
-    category: string;
-    available: boolean;
-}
 
-const MOCK_ITEMS: MenuItem[] = [
-    { id: 1, name: 'Pizza Margherita', description: 'Classic tomato and mozzarella', price: 45.90, category: 'Pizzas', available: true },
-    { id: 2, name: 'Burger Deluxe', description: 'Beef patty with cheddar and bacon', price: 38.50, category: 'Burgers', available: true },
-    { id: 3, name: 'Caesar Salad', description: 'Romaine lettuce with dressing', price: 29.00, category: 'Salads', available: false },
-    { id: 4, name: 'Pasta Carbonara', description: 'Creamy pasta with pancetta', price: 42.00, category: 'Pasta', available: true },
-];
 
 export const MenuManagement: React.FC = () => {
+    const { managerActiveRestaurantId } = useUserStore();
+    const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState('All');
+    const [selectedCategoryId, setSelectedCategoryId] = useState<number | 'All'>('All');
+    const [categories, setCategories] = useState<{ id_categoria: number, nome: string }[]>([]);
 
-    const categories = ['All', ...new Set(MOCK_ITEMS.map(item => item.category))];
+    useEffect(() => {
+        const fetchData = async () => {
+            if (!managerActiveRestaurantId) return;
+            setLoading(true);
+            try {
+                const [menuData, categoriesData] = await Promise.all([
+                    restaurantService.getMenu(managerActiveRestaurantId),
+                    restaurantService.getCategories(managerActiveRestaurantId)
+                ]);
+                setMenuItems(menuData);
+                setCategories(categoriesData);
+            } catch (error) {
+                console.error("Failed to fetch menu data:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, [managerActiveRestaurantId]);
 
-    const filteredItems = MOCK_ITEMS.filter(item => {
-        const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
+    const filteredItems = menuItems.filter(item => {
+        const matchesSearch = item.nome.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesCategory = selectedCategoryId === 'All' || item.id_categoria === selectedCategoryId;
         return matchesSearch && matchesCategory;
     });
 
@@ -69,18 +80,29 @@ export const MenuManagement: React.FC = () => {
                 </div>
 
                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                    <button
+                        onClick={() => setSelectedCategoryId('All')}
+                        className={cn(
+                            "px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap",
+                            selectedCategoryId === 'All'
+                                ? "bg-primary text-white"
+                                : "bg-white dark:bg-[#2d343c] text-[#5d7f89] border border-gray-100 dark:border-gray-800"
+                        )}
+                    >
+                        All
+                    </button>
                     {categories.map(cat => (
                         <button
-                            key={cat}
-                            onClick={() => setSelectedCategory(cat)}
+                            key={cat.id_categoria}
+                            onClick={() => setSelectedCategoryId(cat.id_categoria)}
                             className={cn(
                                 "px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap",
-                                selectedCategory === cat
+                                selectedCategoryId === cat.id_categoria
                                     ? "bg-primary text-white"
                                     : "bg-white dark:bg-[#2d343c] text-[#5d7f89] border border-gray-100 dark:border-gray-800"
                             )}
                         >
-                            {cat}
+                            {cat.nome}
                         </button>
                     ))}
                 </div>
@@ -88,29 +110,37 @@ export const MenuManagement: React.FC = () => {
 
             {/* Items List */}
             <div className="space-y-3">
-                {filteredItems.map(item => (
-                    <Card key={item.id} className="p-0 overflow-hidden">
-                        <Link to={`/menu/edit/${item.id}`} className="p-4 flex justify-between items-start active:bg-gray-50 dark:active:bg-[#353c45] transition-colors">
-                            <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                    <h3 className="font-bold text-sm tracking-tight">{item.name}</h3>
-                                    {!item.available && (
-                                        <span className="text-[10px] font-bold px-2 py-0.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full border border-red-100 dark:border-red-800 uppercase tracking-wider">
-                                            Out of Stock
-                                        </span>
-                                    )}
+                {loading ? (
+                    <div className="flex justify-center py-20">
+                        <div className="size-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                ) : filteredItems.length === 0 ? (
+                    <div className="text-center py-20 text-gray-400 font-bold text-sm">No items found.</div>
+                ) : (
+                    filteredItems.map(item => (
+                        <Card key={item.id_item} className="p-0 overflow-hidden">
+                            <Link to={`/manager/menu/edit/${item.id_item}`} className="p-4 flex justify-between items-start active:bg-gray-50 dark:active:bg-[#353c45] transition-colors">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="font-bold text-sm tracking-tight">{item.nome}</h3>
+                                        {!item.ativo && (
+                                            <span className="text-[10px] font-bold px-2 py-0.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full border border-red-100 dark:border-red-800 uppercase tracking-wider">
+                                                Inactive
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-[11px] text-[#5d7f89] line-clamp-1 mt-0.5">{item.descricao}</p>
+                                    <p className="text-primary font-extrabold mt-2 text-sm">R$ {item.preco.toFixed(2)}</p>
                                 </div>
-                                <p className="text-[11px] text-[#5d7f89] line-clamp-1 mt-0.5">{item.description}</p>
-                                <p className="text-primary font-extrabold mt-2 text-sm">R$ {item.price.toFixed(2)}</p>
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                                <div className="text-[#5d7f89] p-1">
-                                    <MoreVertical size={18} />
+                                <div className="flex flex-col items-end gap-2">
+                                    <div className="text-[#5d7f89] p-1">
+                                        <MoreVertical size={18} />
+                                    </div>
                                 </div>
-                            </div>
-                        </Link>
-                    </Card>
-                ))}
+                            </Link>
+                        </Card>
+                    ))
+                )}
             </div>
         </ManagerLayout>
     );

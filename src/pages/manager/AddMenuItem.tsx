@@ -1,41 +1,32 @@
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { ChevronLeft, Save, Plus, Info, Beef, Wheat, Milk, Cookie, Egg, Soup, Check, LayoutGrid, Package } from 'lucide-react';
+import { ChevronLeft, Save, Beef, Wheat, Milk, Cookie, Egg, Soup, Check, LayoutGrid, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ManagerLayout } from '@/components/ManagerLayout';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
+import { managerService } from '@/services/manager.service';
+import { restaurantService } from '@/services/restaurant.service';
+import { useUserStore } from '@/store/useUserStore';
+import type { Ingredient, MenuCategory, MenuItem } from '@/types/api';
 
 const schema = z.object({
     name: z.string().min(3, 'Name must be at least 3 characters'),
     description: z.string().min(10, 'Description is too short'),
     price: z.number().min(0.01, 'Price must be greater than zero'),
-    category: z.string().min(1, 'Please select a category'),
-    available: z.boolean(),
+    id_categoria: z.number().min(1, 'Please select a category'),
+    ativo: z.boolean(),
     isCombo: z.boolean(),
-    ingredients: z.array(z.string()), // IDs of selected ingredients
-    comboItems: z.array(z.string()), // IDs of existing menu items
+    ingredients: z.array(z.number()),
+    comboItems: z.array(z.number()),
     allergens: z.array(z.string()),
 });
 
 type FormData = z.infer<typeof schema>;
 
-// Mock data for ingredients
-const MOCK_INGREDIENTS = [
-    { id: '1', name: 'Extra Cheddar', price: 4.50, allergens: ['lactose'] },
-    { id: '2', name: 'Bacon Strips', price: 6.00, allergens: ['meat'] },
-    { id: '3', name: 'Egg', price: 3.50, allergens: ['eggs'] },
-    { id: '4', name: 'Truffle Mayo', price: 8.50, allergens: ['eggs', 'lactose'] },
-];
 
-// Mock data for existing menu items (to be used in combos)
-const MOCK_EXISTING_ITEMS = [
-    { id: 'm1', name: 'Classic Burger', price: 28.00, isCombo: false, allergens: ['gluten', 'meat'] },
-    { id: 'm2', name: 'French Fries', price: 12.00, isCombo: false, allergens: [] },
-    { id: 'm3', name: 'Coca-Cola 350ml', price: 7.00, isCombo: false, allergens: [] },
-    { id: 'm4', name: 'Veggie Combo', price: 45.00, isCombo: true, allergens: ['gluten'] },
-];
 
 const ALLERGENS = [
     { id: 'gluten', label: 'Gluten', icon: <Wheat size={14} /> },
@@ -48,11 +39,17 @@ const ALLERGENS = [
 
 export const AddMenuItem: React.FC = () => {
     const navigate = useNavigate();
+    const { managerActiveRestaurantId } = useUserStore();
+    const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+    const [categories, setCategories] = useState<MenuCategory[]>([]);
+    const [existingItems, setExistingItems] = useState<MenuItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
 
     const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
         resolver: zodResolver(schema),
         defaultValues: {
-            available: true,
+            ativo: true,
             isCombo: false,
             ingredients: [],
             comboItems: [],
@@ -60,36 +57,64 @@ export const AddMenuItem: React.FC = () => {
             price: 0,
             description: '',
             name: '',
-            category: ''
+            id_categoria: 1
         }
     });
+
+    useEffect(() => {
+        const fetchData = async () => {
+            if (!managerActiveRestaurantId) return;
+            try {
+                const [ingData, catData, menuData] = await Promise.all([
+                    managerService.getIngredients(managerActiveRestaurantId),
+                    restaurantService.getCategories(managerActiveRestaurantId),
+                    restaurantService.getMenu(managerActiveRestaurantId)
+                ]);
+                setIngredients(ingData);
+                setCategories(catData);
+                setExistingItems(menuData);
+            } catch (error) {
+                console.error("Failed to fetch dependencies:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, [managerActiveRestaurantId]);
 
     const isCombo = watch('isCombo');
     const selectedIngredientIds = watch('ingredients');
     const selectedComboItemIds = watch('comboItems');
     const manualAllergens = watch('allergens');
 
-    // Derive allergens from selected ingredients AND selected combo items
-    const derivedAllergens = Array.from(new Set([
-        ...selectedIngredientIds.flatMap(id =>
-            MOCK_INGREDIENTS.find(ing => ing.id === id)?.allergens || []
-        ),
-        ...selectedComboItemIds.flatMap(id =>
-            MOCK_EXISTING_ITEMS.find(item => item.id === id)?.allergens || []
-        )
-    ]));
+    const totalAllergens = manualAllergens;
 
-    const totalAllergens = Array.from(new Set([...manualAllergens, ...derivedAllergens]));
-
-    const onSubmit = (data: FormData) => {
-        console.log('Saving item:', { ...data, allergens: totalAllergens });
-        navigate('/menu');
+    const onSubmit = async (data: FormData) => {
+        if (!managerActiveRestaurantId) return;
+        setSubmitting(true);
+        try {
+            await managerService.createMenuItem(managerActiveRestaurantId, {
+                nome: data.name,
+                descricao: data.description,
+                preco: data.price,
+                id_categoria: data.id_categoria,
+                ativo: data.ativo,
+                ingredientes: data.ingredients,
+                alergicos: totalAllergens
+            });
+            navigate('/manager/menu');
+        } catch (error) {
+            console.error('Failed to save item:', error);
+            alert("Failed to save menu item. Please try again.");
+        } finally {
+            setSubmitting(false);
+        }
     };
 
-    const toggleSelection = (field: 'ingredients' | 'comboItems', id: string) => {
+    const toggleSelection = (field: 'ingredients' | 'comboItems', id: number) => {
         const current = watch(field);
         if (current.includes(id)) {
-            setValue(field, current.filter((i: string) => i !== id));
+            setValue(field, current.filter((i: number) => i !== id));
         } else {
             setValue(field, [...current, id]);
         }
@@ -133,15 +158,15 @@ export const AddMenuItem: React.FC = () => {
                     </div>
                     <button
                         type="button"
-                        onClick={() => setValue('isCombo', !isCombo)}
+                        onClick={() => setValue('ativo', !watch('ativo'))}
                         className={cn(
                             "w-12 h-6 rounded-full relative transition-colors",
-                            isCombo ? "bg-primary" : "bg-gray-200 dark:bg-gray-700"
+                            watch('ativo') ? "bg-primary" : "bg-gray-200 dark:bg-gray-700"
                         )}
                     >
                         <div className={cn(
                             "absolute top-1 size-4 bg-white rounded-full transition-all",
-                            isCombo ? "right-1" : "left-1"
+                            watch('ativo') ? "right-1" : "left-1"
                         )}></div>
                     </button>
                 </Card>
@@ -180,14 +205,15 @@ export const AddMenuItem: React.FC = () => {
                         <div className="space-y-1.5">
                             <label className="text-xs font-bold text-[#5d7f89] uppercase ml-1">Category</label>
                             <select
-                                {...register('category')}
+                                {...register('id_categoria', { valueAsNumber: true })}
                                 className="w-full bg-white dark:bg-[#2d343c] border border-gray-100 dark:border-gray-800 rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all appearance-none"
                             >
-                                <option value="">Select...</option>
-                                <option value="Burgers">Burgers</option>
-                                <option value="Combos">Combos</option>
-                                <option value="Drinks">Drinks</option>
+                                <option value={0}>Select...</option>
+                                {categories.map(cat => (
+                                    <option key={cat.id_categoria} value={cat.id_categoria}>{cat.nome}</option>
+                                ))}
                             </select>
+                            {errors.id_categoria && <p className="text-red-500 text-[10px] font-bold ml-1">{errors.id_categoria.message}</p>}
                         </div>
                     </div>
                 </div>
@@ -200,29 +226,32 @@ export const AddMenuItem: React.FC = () => {
                             <h3 className="text-xs font-bold text-[#5d7f89] uppercase tracking-widest">Included Products</h3>
                         </div>
                         <Card className="p-0 overflow-hidden border-2 border-primary/20">
-                            <div className="divide-y divide-gray-50 dark:divide-gray-800 max-h-48 overflow-y-auto scrollbar-hide">
-                                {MOCK_EXISTING_ITEMS.map(item => (
-                                    <label key={item.id} className="flex items-center gap-3 p-4 active:bg-gray-50 dark:active:bg-[#353c45] cursor-pointer transition-colors">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedComboItemIds.includes(item.id)}
-                                            onChange={() => toggleSelection('comboItems', item.id)}
-                                            className="hidden"
-                                        />
-                                        <div className={cn(
-                                            "size-5 rounded-full border-2 flex items-center justify-center transition-all",
-                                            selectedComboItemIds.includes(item.id) ? "bg-primary border-primary" : "border-gray-200 dark:border-gray-700"
-                                        )}>
-                                            {selectedComboItemIds.includes(item.id) && <Check size={12} className="text-white" />}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-sm font-bold">{item.name}</p>
-                                            {item.isCombo && <span className="text-[8px] px-1 bg-teal-50 text-teal-600 rounded uppercase font-bold">Recursive Combo</span>}
-                                        </div>
-                                        <p className="text-xs font-bold text-[#5d7f89]">R$ {item.price.toFixed(2)}</p>
-                                    </label>
-                                ))}
-                            </div>
+                            {loading ? (
+                                <div className="p-4 text-center text-xs text-gray-400">Loading items...</div>
+                            ) : (
+                                <div className="divide-y divide-gray-50 dark:divide-gray-800 max-h-48 overflow-y-auto scrollbar-hide">
+                                    {existingItems.map(item => (
+                                        <label key={item.id_item} className="flex items-center gap-3 p-4 active:bg-gray-50 dark:active:bg-[#353c45] cursor-pointer transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedComboItemIds.includes(item.id_item)}
+                                                onChange={() => toggleSelection('comboItems', item.id_item)}
+                                                className="hidden"
+                                            />
+                                            <div className={cn(
+                                                "size-5 rounded-full border-2 flex items-center justify-center transition-all",
+                                                selectedComboItemIds.includes(item.id_item) ? "bg-primary border-primary" : "border-gray-200 dark:border-gray-700"
+                                            )}>
+                                                {selectedComboItemIds.includes(item.id_item) && <Check size={12} className="text-white" />}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-sm font-bold">{item.nome}</p>
+                                            </div>
+                                            <p className="text-xs font-bold text-[#5d7f89]">R$ {item.preco.toFixed(2)}</p>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
                         </Card>
                     </section>
                 )}
@@ -241,28 +270,32 @@ export const AddMenuItem: React.FC = () => {
                     </div>
 
                     <Card className="p-0 overflow-hidden">
-                        <div className="divide-y divide-gray-50 dark:divide-gray-800 h-48 overflow-y-auto scrollbar-hide">
-                            {MOCK_INGREDIENTS.map(ing => (
-                                <label key={ing.id} className="flex items-center gap-3 p-4 active:bg-gray-50 dark:active:bg-[#353c45] cursor-pointer transition-colors">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedIngredientIds.includes(ing.id)}
-                                        onChange={() => toggleSelection('ingredients', ing.id)}
-                                        className="hidden"
-                                    />
-                                    <div className={cn(
-                                        "size-5 rounded border-2 flex items-center justify-center transition-all",
-                                        selectedIngredientIds.includes(ing.id) ? "bg-primary border-primary" : "border-gray-200 dark:border-gray-700"
-                                    )}>
-                                        {selectedIngredientIds.includes(ing.id) && <Check size={12} className="text-white" />}
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="text-sm font-bold">{ing.name}</p>
-                                        <p className="text-[10px] text-[#5d7f89]">Extra: R$ {ing.price.toFixed(2)}</p>
-                                    </div>
-                                </label>
-                            ))}
-                        </div>
+                        {loading ? (
+                            <div className="p-4 text-center text-xs text-gray-400">Loading ingredients...</div>
+                        ) : (
+                            <div className="divide-y divide-gray-50 dark:divide-gray-800 h-48 overflow-y-auto scrollbar-hide">
+                                {ingredients.map(ing => (
+                                    <label key={ing.id_ingrediente} className="flex items-center gap-3 p-4 active:bg-gray-50 dark:active:bg-[#353c45] cursor-pointer transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedIngredientIds.includes(ing.id_ingrediente)}
+                                            onChange={() => toggleSelection('ingredients', ing.id_ingrediente)}
+                                            className="hidden"
+                                        />
+                                        <div className={cn(
+                                            "size-5 rounded border-2 flex items-center justify-center transition-all",
+                                            selectedIngredientIds.includes(ing.id_ingrediente) ? "bg-primary border-primary" : "border-gray-200 dark:border-gray-700"
+                                        )}>
+                                            {selectedIngredientIds.includes(ing.id_ingrediente) && <Check size={12} className="text-white" />}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-sm font-bold">{ing.nome}</p>
+                                            <p className="text-[10px] text-[#5d7f89]">Extra: R$ {(ing.preco || 0).toFixed(2)}</p>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        )}
                     </Card>
                 </section>
 
@@ -274,25 +307,21 @@ export const AddMenuItem: React.FC = () => {
 
                     <div className="grid grid-cols-3 gap-2">
                         {ALLERGENS.map(all => {
-                            const autoSelected = derivedAllergens.includes(all.id);
                             const manuallySelected = manualAllergens.includes(all.id);
                             return (
                                 <button
                                     key={all.id}
                                     type="button"
-                                    disabled={autoSelected}
                                     onClick={() => toggleManualAllergen(all.id)}
                                     className={cn(
                                         "flex items-center gap-1.5 px-2 py-2.5 rounded-xl border text-[10px] font-bold transition-all",
-                                        (autoSelected || manuallySelected)
+                                        manuallySelected
                                             ? "bg-orange-50 dark:bg-orange-900/20 border-orange-200 text-orange-600"
-                                            : "bg-white dark:bg-[#2d343c] border-gray-100 dark:border-gray-800 text-[#5d7f89]",
-                                        autoSelected && "ring-1 ring-orange-200"
+                                            : "bg-white dark:bg-[#2d343c] border-gray-100 dark:border-gray-800 text-[#5d7f89]"
                                     )}
                                 >
                                     {all.icon}
                                     {all.label}
-                                    {autoSelected && <span className="ml-auto text-[8px] opacity-60">(Auto)</span>}
                                 </button>
                             );
                         })}
@@ -302,10 +331,17 @@ export const AddMenuItem: React.FC = () => {
                 {/* Action Button */}
                 <button
                     type="submit"
-                    className="w-full bg-primary text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                    disabled={submitting}
+                    className="w-full bg-primary text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50"
                 >
-                    <Save size={20} />
-                    {isCombo ? 'Create Combo' : 'Save Menu Item'}
+                    {submitting ? (
+                        <div className="size-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                        <>
+                            <Save size={20} />
+                            {isCombo ? 'Create Combo' : 'Save Menu Item'}
+                        </>
+                    )}
                 </button>
             </form>
         </ManagerLayout>
