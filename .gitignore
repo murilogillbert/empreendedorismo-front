@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+stitch_manager_dashboard_stats
+bd.sql

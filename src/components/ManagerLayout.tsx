@@ -36,10 +36,10 @@ export const ManagerLayout: React.FC<ManagerLayoutProps> = ({ children }) => {
             {/* Bottom Navigation Bar (iOS Style) */}
             <nav className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-background-dark/90 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 px-6 pb-6 pt-3 z-50">
                 <div className="flex items-center justify-between max-w-md mx-auto">
-                    <NavItem to="/" icon={<Home className="w-6 h-6" />} label="Home" active={activeTab === '/'} />
-                    <NavItem to="/menu" icon={<MenuIcon className="w-6 h-6" />} label="Menu" active={activeTab === '/menu'} />
-                    <NavItem to="/staff" icon={<Users className="w-6 h-6" />} label="Staff" active={activeTab === '/staff'} />
-                    <NavItem to="/settings" icon={<Settings className="w-6 h-6" />} label="Settings" active={activeTab === '/settings'} />
+                    <NavItem to="/manager" icon={<Home className="w-6 h-6" />} label="Home" active={activeTab === '/manager'} />
+                    <NavItem to="/manager/menu" icon={<MenuIcon className="w-6 h-6" />} label="Menu" active={activeTab === '/manager/menu'} />
+                    <NavItem to="/manager/staff" icon={<Users className="w-6 h-6" />} label="Staff" active={activeTab === '/manager/staff'} />
+                    <NavItem to="/manager/settings" icon={<Settings className="w-6 h-6" />} label="Settings" active={activeTab === '/manager/settings'} />
                 </div>
             </nav>
 

@@ -6,11 +6,12 @@ interface CardProps {
     className?: string;
     title?: string;
     subtitle?: string;
+    id?: string;
 }
 
-export const Card: React.FC<CardProps> = ({ children, className, title, subtitle }) => {
+export const Card: React.FC<CardProps> = ({ children, className, title, subtitle, id }) => {
     return (
-        <div className={cn(
+        <div id={id} className={cn(
             "bg-white dark:bg-[#2d343c] p-5 rounded-xl border border-gray-100 dark:border-gray-800 soft-shadow transition-colors",
             className
         )}>

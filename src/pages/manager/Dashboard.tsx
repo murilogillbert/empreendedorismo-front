@@ -51,20 +51,22 @@ export const Dashboard: React.FC = () => {
                 </Card>
 
                 {/* Orders Card */}
-                <Card className="col-span-2 flex items-center justify-between p-4">
-                    <div className="flex items-center gap-4">
-                        <div className="bg-orange-100 dark:bg-orange-900/30 p-3 rounded-xl">
-                            <ReceiptText className="text-orange-600 dark:text-orange-400" />
+                <Link to="/kitchen-production" className="col-span-2 group">
+                    <Card className="flex items-center justify-between p-4 group-hover:border-primary/50 transition-all active:scale-[0.98]">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-orange-100 dark:bg-orange-900/30 p-3 rounded-xl group-hover:scale-110 transition-transform">
+                                <ReceiptText className="text-orange-600 dark:text-orange-400" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold">Active Orders</p>
+                                <p className="text-[#5d7f89] text-xs">6 in kitchen · 8 completed</p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-sm font-bold">Active Orders</p>
-                            <p className="text-[#5d7f89] text-xs">6 in kitchen · 8 completed</p>
+                        <div className="text-right">
+                            <p className="text-xl font-extrabold text-primary">14</p>
                         </div>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-xl font-extrabold text-primary">14</p>
-                    </div>
-                </Card>
+                    </Card>
+                </Link>
             </div>
 
             {/* Action Panel */}
