@@ -52,19 +52,39 @@ const MOCK_MENU = [
 export const RestaurantMenu: React.FC = () => {
     const navigate = useNavigate();
     const { id } = useParams();
-    const user = useUserStore((state) => state.user);
-    const identify = useUserStore((state) => state.identify);
+    const { user, identify, cart, addToCart, setCurrentRestaurant } = useUserStore();
     const [activeCategory, setActiveCategory] = useState('Appetizers');
     const [showIdentityModal, setShowIdentityModal] = useState(false);
-    const [cartCount, setCartCount] = useState(0);
     const [guestData, setGuestData] = useState({ name: '', contact: '' });
+    const [pendingItem, setPendingItem] = useState<any>(null);
 
-    const handleAddToCart = () => {
+    React.useEffect(() => {
+        if (id) {
+            setCurrentRestaurant(id);
+        }
+    }, [id, setCurrentRestaurant]);
+
+    const handleBack = () => {
+        setCurrentRestaurant(null);
+        navigate('/');
+    };
+
+    const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
+    const cartTotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
+
+    const handleAddToCart = (item: any) => {
         if (!user) {
+            setPendingItem(item);
             setShowIdentityModal(true);
             return;
         }
-        setCartCount(prev => prev + 1);
+        addToCart({
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: 1,
+            image: item.image
+        });
     };
 
     const handleGuestIdentify = (e: React.FormEvent) => {
@@ -74,8 +94,17 @@ export const RestaurantMenu: React.FC = () => {
             phone: guestData.contact,
             isGuest: true
         });
+        if (pendingItem) {
+            addToCart({
+                id: pendingItem.id,
+                name: pendingItem.name,
+                price: pendingItem.price,
+                quantity: 1,
+                image: pendingItem.image
+            });
+            setPendingItem(null);
+        }
         setShowIdentityModal(false);
-        setCartCount(prev => prev + 1);
     };
 
     return (
@@ -83,7 +112,7 @@ export const RestaurantMenu: React.FC = () => {
             {/* Header */}
             <div id="menu-header" className="flex items-center bg-white dark:bg-[#1f1a16] px-4 py-4 justify-between border-b border-gray-100 dark:border-gray-800 sticky top-0 z-40">
                 <div id="menu-header-info" className="flex items-center gap-3">
-                    <button id="menu-back-button" onClick={() => navigate('/')} className="size-10 flex items-center justify-center rounded-full bg-gray-50 dark:bg-gray-800 transition-colors hover:bg-gray-100">
+                    <button id="menu-back-button" onClick={handleBack} className="size-10 flex items-center justify-center rounded-full bg-gray-50 dark:bg-gray-800 transition-colors hover:bg-gray-100">
                         <ArrowLeft size={18} />
                     </button>
                     <div id="menu-restaurant-details">
@@ -139,7 +168,7 @@ export const RestaurantMenu: React.FC = () => {
             </div>
 
             {/* Menu Items */}
-            <div id="menu-items-container" className="pb-56 px-4 pt-6">
+            <div id="menu-items-container" className="pb-64 px-4 pt-6">
                 <div id="menu-items-header" className="flex items-center justify-between mb-6 px-1">
                     <h2 id="menu-active-category-title" className="text-xl font-black tracking-tight">{activeCategory}</h2>
                     <span id="menu-active-category-subtitle" className="text-[#7A4C30]/40 text-[10px] font-black uppercase tracking-[0.15em]">{activeCategory === 'Mains' ? 'Signature Dishes' : 'Small Plates'}</span>
@@ -172,7 +201,7 @@ export const RestaurantMenu: React.FC = () => {
                                         </div>
                                         <button
                                             id={`menu-item-add-button-${item.id}`}
-                                            onClick={handleAddToCart}
+                                            onClick={() => handleAddToCart(item)}
                                             className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#e65c00] text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-[#e65c00]/20 active:scale-95 transition-all hover:bg-orange-600"
                                         >
                                             Add to Order
@@ -203,7 +232,7 @@ export const RestaurantMenu: React.FC = () => {
                                         </div>
                                         <button
                                             id={`menu-item-add-button-${item.id}`}
-                                            onClick={handleAddToCart}
+                                            onClick={() => handleAddToCart(item)}
                                             className="size-9 flex items-center justify-center rounded-full bg-[#e65c00] text-white shadow-lg shadow-[#e65c00]/15 active:scale-90 transition-transform"
                                         >
                                             <Plus size={18} strokeWidth={3} />
@@ -229,10 +258,14 @@ export const RestaurantMenu: React.FC = () => {
                             </div>
                             <div id="menu-cart-total-info">
                                 <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.15em]">Cart Summary</p>
-                                <p className="text-base font-black">R$ {(cartCount * 14).toFixed(2)} <span className="text-[10px] font-normal opacity-40 ml-1">+ taxes</span></p>
+                                <p className="text-base font-black">R$ {cartTotal.toFixed(2)} <span className="text-[10px] font-normal opacity-40 ml-1">+ taxes</span></p>
                             </div>
                         </div>
-                        <button id="menu-view-cart-button" className="bg-[#e65c00] hover:bg-orange-600 transition-all px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-[#e65c00]/20 active:scale-95">
+                        <button
+                            id="menu-view-cart-button"
+                            onClick={() => navigate('/cart')}
+                            className="bg-[#e65c00] hover:bg-orange-600 transition-all px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-[#e65c00]/20 active:scale-95"
+                        >
                             View Cart
                             <ChevronRight size={16} strokeWidth={3} />
                         </button>

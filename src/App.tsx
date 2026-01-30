@@ -17,6 +17,11 @@ import { Auth } from '@/pages/consumer/Auth';
 import { RestaurantMenu } from '@/pages/consumer/RestaurantMenu';
 import { ActiveSession } from '@/pages/consumer/ActiveSession';
 import { Reservations } from '@/pages/consumer/Reservations';
+import { Cart } from '@/pages/consumer/Cart';
+import { Orders } from '@/pages/consumer/Orders';
+import { Bill } from '@/pages/consumer/Bill';
+import { SplitBill } from '@/pages/consumer/SplitBill';
+import { Profile } from '@/pages/consumer/Profile';
 
 function App() {
   return (
@@ -28,10 +33,14 @@ function App() {
         <Route path="/auth" element={<Auth />} />
         <Route path="/menu/:id" element={<RestaurantMenu />} />
         <Route path="/menu" element={<Navigate to="/menu/1" replace />} />
+        <Route path="/cart" element={<Cart />} />
+        <Route path="/orders" element={<Orders />} />
+        <Route path="/bill" element={<Bill />} />
+        <Route path="/split-bill" element={<SplitBill />} />
         <Route path="/sessions" element={<ActiveSession />} />
         <Route path="/reservations/:id" element={<Reservations />} />
-        <Route path="/saved" element={<Navigate to="/auth" replace />} />
-        <Route path="/profile" element={<Navigate to="/auth" replace />} />
+        <Route path="/saved" element={<Profile />} />
+        <Route path="/profile" element={<Profile />} />
 
         {/* Manager Routes */}
         <Route path="/manager/menu" element={<MenuManagement />} />

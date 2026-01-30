@@ -29,15 +29,19 @@ const GUEST_COUNTS = ['2', '3', '4', '5', '6', '8+'];
 export const Reservations: React.FC = () => {
     const navigate = useNavigate();
     const { id } = useParams();
-    const user = useUserStore((state) => state.user);
-    const identify = useUserStore((state) => state.identify);
-
+    const { user, identify, setCurrentRestaurant } = useUserStore();
     const [seating, setSeating] = useState<'INDOOR' | 'OUTDOOR'>('INDOOR');
     const [selectedDate, setSelectedDate] = useState('24');
     const [selectedTime, setSelectedTime] = useState('19:30');
     const [selectedGuests, setSelectedGuests] = useState('2');
     const [showIdentityModal, setShowIdentityModal] = useState(false);
     const [guestData, setGuestData] = useState({ name: '', contact: '' });
+
+    React.useEffect(() => {
+        if (id) {
+            setCurrentRestaurant(id);
+        }
+    }, [id, setCurrentRestaurant]);
 
     const handleConfirm = () => {
         if (!user) {
@@ -80,7 +84,7 @@ export const Reservations: React.FC = () => {
                 </button>
             </div>
 
-            <div id="reserve-content" className="p-4 pb-56 space-y-10 pt-8 max-w-lg mx-auto">
+            <div id="reserve-content" className="p-4 pb-64 space-y-10 pt-8 max-w-lg mx-auto">
                 {/* Guest Count */}
                 <section id="reserve-guests-section" className="space-y-5">
                     <div id="reserve-guests-header" className="flex items-center gap-2.5 px-1">
@@ -214,8 +218,8 @@ export const Reservations: React.FC = () => {
                 </section>
             </div>
 
-            {/* Bottom Confirmation Bar */}
-            <div id="reserve-confirmation-bar" className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-[#1f1a16]/95 backdrop-blur-xl border-t border-gray-100 dark:border-gray-800 p-5 pb-8 z-50">
+            {/* Bottom Confirmation Bar - Offset for Bottom Nav */}
+            <div id="reserve-confirmation-bar" className="fixed bottom-24 left-4 right-4 bg-white/95 dark:bg-[#1f1a16]/95 backdrop-blur-xl border border-gray-100 dark:border-gray-800 p-5 rounded-[2.5rem] z-50 shadow-2xl">
                 <div id="reserve-confirmation-container" className="max-w-md mx-auto flex flex-col gap-5">
                     <div id="reserve-confirmation-info" className="flex justify-between items-center px-2">
                         <div id="reserve-total-due">

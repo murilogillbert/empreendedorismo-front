@@ -70,8 +70,8 @@ export const Discovery: React.FC = () => {
                 <RestaurantMap restaurants={MOCK_RESTAURANTS} />
             </div>
 
-            {/* Featured Card */}
-            <div id="discovery-featured-section" className="absolute bottom-6 left-0 w-full px-4 z-10">
+            {/* Featured Card - Offset for Bottom Nav */}
+            <div id="discovery-featured-section" className="absolute bottom-32 left-0 w-full px-4 z-10">
                 <div id="discovery-featured-card" className="flex items-center gap-4 rounded-2xl bg-white dark:bg-[#1f1a16] p-4 shadow-2xl border border-gray-100 dark:border-gray-800 animate-in slide-in-from-bottom-10 duration-500">
                     <div className="flex flex-[1.5] flex-col gap-3">
                         <div className="flex flex-col gap-0.5">

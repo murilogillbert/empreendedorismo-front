@@ -133,7 +133,7 @@ export const ActiveSession: React.FC = () => {
                 </div>
             </div>
 
-            <div id="session-content" className="pb-56 pt-6 px-4">
+            <div id="session-content" className="pb-64 pt-6 px-4">
                 {/* Session Stats */}
                 <div id="session-stats-grid" className="grid grid-cols-2 gap-4 mb-8">
                     <Card id="session-stat-items" className="p-5 bg-white dark:bg-[#1f1a16] border-none shadow-sm flex flex-col gap-1">
