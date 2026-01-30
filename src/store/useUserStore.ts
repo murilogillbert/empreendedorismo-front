@@ -23,11 +23,13 @@ interface UserState {
     isAuthenticated: boolean;
     activeSessionId: string | null;
     currentRestaurantId: string | null;
+    savedRestaurants: string[];
     cart: CartItem[];
     identify: (userData: User) => void;
     logout: () => void;
     setSession: (sessionId: string | null) => void;
     setCurrentRestaurant: (restaurantId: string | null) => void;
+    toggleSavedRestaurant: (restaurantId: string) => void;
     addToCart: (item: CartItem) => void;
     removeFromCart: (itemId: string) => void;
     updateCartQuantity: (itemId: string, quantity: number) => void;
@@ -41,14 +43,20 @@ export const useUserStore = create<UserState>()(
             isAuthenticated: false,
             activeSessionId: null, // Scanned QR code or active reservation
             currentRestaurantId: null, // Restaurant being browsed
+            savedRestaurants: [],
             cart: [],
             identify: (userData) => set({
                 user: userData,
                 isAuthenticated: !userData.isGuest
             }),
-            logout: () => set({ user: null, isAuthenticated: false, activeSessionId: null, currentRestaurantId: null, cart: [] }),
+            logout: () => set({ user: null, isAuthenticated: false, activeSessionId: null, currentRestaurantId: null, savedRestaurants: [], cart: [] }),
             setSession: (activeSessionId) => set({ activeSessionId }),
             setCurrentRestaurant: (currentRestaurantId) => set({ currentRestaurantId }),
+            toggleSavedRestaurant: (id) => set((state) => ({
+                savedRestaurants: state.savedRestaurants.includes(id)
+                    ? state.savedRestaurants.filter(rid => rid !== id)
+                    : [...state.savedRestaurants, id]
+            })),
             addToCart: (item) => set((state) => {
                 const existing = state.cart.find(i => i.id === item.id);
                 if (existing) {

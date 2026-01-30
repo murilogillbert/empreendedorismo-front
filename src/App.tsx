@@ -22,6 +22,7 @@ import { Orders } from '@/pages/consumer/Orders';
 import { Bill } from '@/pages/consumer/Bill';
 import { SplitBill } from '@/pages/consumer/SplitBill';
 import { Profile } from '@/pages/consumer/Profile';
+import { Saved } from '@/pages/consumer/Saved';
 
 function App() {
   return (
@@ -39,7 +40,7 @@ function App() {
         <Route path="/split-bill" element={<SplitBill />} />
         <Route path="/sessions" element={<ActiveSession />} />
         <Route path="/reservations/:id" element={<Reservations />} />
-        <Route path="/saved" element={<Profile />} />
+        <Route path="/saved" element={<Saved />} />
         <Route path="/profile" element={<Profile />} />
 
         {/* Manager Routes */}

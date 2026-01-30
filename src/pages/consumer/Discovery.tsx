@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, SlidersHorizontal, Pizza, Fish, Coffee, Croissant, Star, ArrowRight } from 'lucide-react';
+import { Search, SlidersHorizontal, Pizza, Fish, Coffee, Croissant, Star, ArrowRight, Heart } from 'lucide-react';
 import { ConsumerLayout } from '@/components/ConsumerLayout';
 import { RestaurantMap } from '@/components/RestaurantMap';
 import { cn } from '@/lib/utils';
+import { useUserStore } from '@/store/useUserStore';
 
 const CATEGORIES = [
     { id: 'italian', label: 'Italian', icon: <Pizza size={18} /> },
@@ -39,7 +40,7 @@ export const Discovery: React.FC = () => {
                                 type="text"
                             />
                         </div>
-                        <button id="discovery-filter-button" className="flex size-12 items-center justify-center rounded-xl bg-white dark:bg-[#1f1a16] shadow-lg border border-gray-100 dark:border-gray-800 text-[#7A4C30] active:scale-95 transition-transform">
+                        <button id="discovery-filter-button" className="flex size-12 items-center justify-center rounded-xl bg-white dark:bg-[#1f1a16] shadow-lg border border-gray-100 dark:border-gray-800 text-[#7A4C30] active:scale-95 transition-transform mr-[35px]">
                             <SlidersHorizontal size={20} />
                         </button>
                     </div>
@@ -72,7 +73,26 @@ export const Discovery: React.FC = () => {
 
             {/* Featured Card - Offset for Bottom Nav */}
             <div id="discovery-featured-section" className="absolute bottom-32 left-0 w-full px-4 z-10">
-                <div id="discovery-featured-card" className="flex items-center gap-4 rounded-2xl bg-white dark:bg-[#1f1a16] p-4 shadow-2xl border border-gray-100 dark:border-gray-800 animate-in slide-in-from-bottom-10 duration-500">
+                <div id="discovery-featured-card" className="flex items-center gap-4 rounded-2xl bg-white dark:bg-[#1f1a16] p-4 shadow-2xl border border-gray-100 dark:border-gray-800 animate-in slide-in-from-bottom-10 duration-500 relative">
+                    {/* Save Button */}
+                    <button
+                        onClick={() => {
+                            // In a real app we would use the actual ID from the featured restaurant
+                            const featuredId = '1';
+                            useUserStore.getState().toggleSavedRestaurant(featuredId);
+                        }}
+                        className="absolute top-2 right-2 size-8 flex items-center justify-center rounded-full bg-gray-50/50 dark:bg-gray-800/50 backdrop-blur-sm transition-all active:scale-90"
+                    >
+                        <Heart
+                            size={16}
+                            className={cn(
+                                "transition-colors",
+                                useUserStore.getState().savedRestaurants.includes('1')
+                                    ? "fill-red-500 text-red-500"
+                                    : "text-gray-400"
+                            )}
+                        />
+                    </button>
                     <div className="flex flex-[1.5] flex-col gap-3">
                         <div className="flex flex-col gap-0.5">
                             <div className="flex items-center gap-1">
