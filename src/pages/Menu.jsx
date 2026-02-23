@@ -28,7 +28,8 @@ const Menu = () => {
         // Fetch menu items from API
         // For now, we'll use restaurant ID 1 (the test restaurant)
         // In the future, this should come from user selection
-        fetch('/api/menu/1')
+        const apiUrl = process.env.REACT_APP_API_URL || '';
+        fetch(`${apiUrl}/api/menu/1`)
             .then(res => res.json())
             .then(data => {
                 // Map database fields to component format
