@@ -37,7 +37,8 @@ const Orders = () => {
                 fetchSessionData(storedSessionId);
             } else {
                 // Create new session
-                const response = await fetch('/api/session/create', {
+                const apiUrl = process.env.REACT_APP_API_URL || '';
+                const response = await fetch(`${apiUrl}/api/session/create`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ restaurantId: 1 })
@@ -64,14 +65,15 @@ const Orders = () => {
             const total = cart.reduce((sum, item) => sum + (item.preco * item.quantity), 0) * 1.1; // Include 10% service fee
 
             // Fetch payment status
-            const response = await fetch(`/api/session/${sid}/payment-status?total=${total}`);
+            const apiUrl = process.env.REACT_APP_API_URL || '';
+            const response = await fetch(`${apiUrl}/api/session/${sid}/payment-status?total=${total}`);
 
             if (response.ok) {
                 const data = await response.json();
                 setSessionData(data);
 
                 // Fetch share link
-                const linkResponse = await fetch(`/api/session/${sid}/share-link`);
+                const linkResponse = await fetch(`${apiUrl}/api/session/${sid}/share-link`);
                 if (linkResponse.ok) {
                     const linkData = await linkResponse.json();
                     setShareLink(linkData.shareUrl);

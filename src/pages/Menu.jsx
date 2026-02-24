@@ -31,7 +31,9 @@ const Menu = () => {
         const restaurantId = params.get('id') || '1'; // Fallback para 1 se não vier nada
 
         // Fetch menu items from API
-        fetch(`/api/menu/${restaurantId}`)
+        // For now, we'll use restaurant ID 1 (the test restaurant)
+        // In the future, this should come from user selection
+        fetch('/api/menu/1')
             .then(res => res.json())
             .then(data => {
                 // Map database fields to component format

@@ -84,7 +84,8 @@ const Home = () => {
 
     useEffect(() => {
         // 1. Fetch data
-        fetch('/api/restaurants')
+        const apiUrl = process.env.REACT_APP_API_URL || '';
+        fetch(`${apiUrl}/api/restaurants`)
             .then(res => res.json())
             .then(data => {
                 setRestaurants(data);
