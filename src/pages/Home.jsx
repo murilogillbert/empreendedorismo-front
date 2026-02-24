@@ -145,43 +145,48 @@ const Home = () => {
     useEffect(() => {
         if (!mapInstance.current || !restaurants.length || !userLocation) return;
 
-        // Clear previous markers
+        // Limpar marcadores anteriores
         markersLayer.current.clearLayers();
 
-        const filtered = restaurants.filter(rest => {
-            if (!rest.latitude || !rest.longitude) return false;
+        let count3km = 0;
+
+        restaurants.forEach(rest => {
+            if (!rest.latitude || !rest.longitude) return;
+
             const dist = calculateDistance(
                 userLocation[0], userLocation[1],
                 parseFloat(rest.latitude), parseFloat(rest.longitude)
             );
-            return dist <= 3;
-        });
 
-        setFilteredCount(filtered.length);
+            if (dist <= 3) {
+                count3km++;
+            }
 
-        filtered.forEach(rest => {
+            // Adicionar marcador para TODOS os restaurantes
             const marker = L.marker([parseFloat(rest.latitude), parseFloat(rest.longitude)], {
                 icon: createCustomIcon('#FF8C00')
             });
 
             const popupContent = document.createElement('div');
             popupContent.innerHTML = `
-        <div style="padding: 4px;">
-          <h4 style="margin: 0 0 4px 0; font-family: Outfit, sans-serif;">${rest.nome_fantasia}</h4>
-          <p style="margin: 0 0 12px 0; font-size: 12px; color: #666;">${rest.categoria_principal || 'Restaurante'}</p>
-        </div>
-      `;
+                <div style="padding: 4px;">
+                  <h4 style="margin: 0 0 4px 0; font-family: Outfit, sans-serif;">${rest.nome_fantasia}</h4>
+                  <p style="margin: 0 0 12px 0; font-size: 12px; color: #666;">${rest.categoria_principal || 'Restaurante'}</p>
+                  <p style="margin: 0 0 4px 0; font-size: 11px; color: #999;">Distância: ${dist.toFixed(2)}km</p>
+                </div>
+            `;
 
             const btn = document.createElement('button');
             btn.innerText = 'Ver Cardápio';
             btn.style.cssText = 'width: 100%; background: #FF8C00; color: white; border: none; padding: 8px; border-radius: 8px; font-weight: bold; cursor: pointer;';
-            btn.onclick = () => navigate('/menu');
+            btn.onclick = () => navigate(`/menu?id=${rest.id_restaurante}`);
 
             popupContent.appendChild(btn);
-
             marker.bindPopup(popupContent);
             markersLayer.current.addLayer(marker);
         });
+
+        setFilteredCount(count3km);
 
         // Update user marker position
         if (userMarker.current) {

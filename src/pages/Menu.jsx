@@ -12,7 +12,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 
 const Menu = () => {
@@ -20,15 +20,18 @@ const Menu = () => {
     const [menuItems, setMenuItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
+    const location = useLocation();
 
     useEffect(() => {
         const savedCart = JSON.parse(localStorage.getItem('cart') || '[]');
         setCart(savedCart);
 
+        // Pegar ID do restaurante da URL
+        const params = new URLSearchParams(location.search);
+        const restaurantId = params.get('id') || '1'; // Fallback para 1 se não vier nada
+
         // Fetch menu items from API
-        // For now, we'll use restaurant ID 1 (the test restaurant)
-        // In the future, this should come from user selection
-        fetch('/api/menu/1')
+        fetch(`/api/menu/${restaurantId}`)
             .then(res => res.json())
             .then(data => {
                 // Map database fields to component format
